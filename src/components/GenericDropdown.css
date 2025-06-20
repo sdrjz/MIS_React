@@ -1,0 +1,53 @@
+/* Main control box */
+.custom-select__control {
+  font-size: 12px !important;
+  min-height: 38px;
+  padding: 4px 8px;
+  display: flex;
+  align-items: center;
+}
+
+/* Dropdown options menu */
+.custom-select__menu {
+  font-size: 12px !important;
+  max-height: 200px;
+  overflow-y: auto;
+  z-index: 9999;
+}
+
+/* Individual options */
+.custom-select__option {
+  padding: 4px 10px !important;
+  font-size: 12px;
+  display: flex;
+  align-items: center;
+}
+
+/* Checkbox itself */
+.custom-select__option input[type='checkbox'] {
+  transform: scale(0.9);
+  margin-right: 6px;
+}
+
+.custom-multi-select
+{
+   font-size: 5px !important;
+}
+
+.custom-select__option {
+  font-size: 12px !important;
+  padding: 4px 8px;
+  display: flex;
+  align-items: center;
+}
+
+/* Checkbox label */
+.custom-select__option label {
+  font-size: 12px !important;
+  margin: 0;
+}
+
+/* Hide chips spacing completely */
+.custom-select__multi-value {
+  display: none !important;
+}

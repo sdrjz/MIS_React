@@ -1,0 +1,54 @@
+.table-responsive-wrapper {
+  max-height: 400px;  
+  overflow-y: auto;
+
+  max-width: 100%;
+  overflow-x: auto;    
+  border: 1px solid #ddd;
+}
+
+.table thead th {
+  text-align: center;
+  vertical-align: middle;
+  font-size: 8.5px;
+  padding: 8px; 
+}
+
+.table tbody td {
+  padding: 6px 8px;
+  vertical-align: middle;
+   font-size: 9px;
+}
+
+.report-title {
+  font-weight: 600;
+  font-size: 20px;
+  margin-bottom: 0.3rem;
+}
+
+.text-muted {
+  font-size: 14px;
+}
+
+.excel-icon {
+  width: 40px; 
+  height: 40px;
+  cursor: pointer;
+}
+
+.excel-icon-link {
+  display: inline-block;
+}
+
+.dropdown {
+
+  font-size: 10px;
+
+}
+
+.custom-select__option label
+{
+  font-size: 10px;
+}
+
+
