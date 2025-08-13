@@ -10,14 +10,14 @@
 .table thead th {
   text-align: center;
   vertical-align: middle;
-  font-size: 8.5px;
+  font-size: 11px;
   padding: 8px; 
 }
 
 .table tbody td {
   padding: 6px 8px;
   vertical-align: middle;
-   font-size: 9px;
+   font-size: 14px;
 }
 
 .report-title {

@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import axios from '../utils/axios';
 import './QSRBankReport.css';
 import excelImg from '../assets/images/ExcelFile.png';
+import loaderGif from '../assets/images/Loader.gif';
 
 function QSRBankReport() {
   const [data, setData] = useState([]);
@@ -11,6 +12,8 @@ function QSRBankReport() {
   const [totalCount, setTotalCount] = useState(0);
   const [loading, setLoading] = useState(false);
   const [downloadProgress, setDownloadProgress] = useState(0);
+
+  const [hasSearched, setHasSearched] = useState(false);
 
   const filters = {
     StartDate: '01/01/2025',
@@ -101,7 +104,8 @@ function QSRBankReport() {
       <div className="d-flex justify-content-between align-items-center mb-3">
         <div className="flex-grow-1 text-center">
           <h3 className="report-title m-0">Bank QSR Report</h3>
-          <p className="text-muted m-0">Total Count: {totalCount}</p>
+          {/* <p className="text-muted m-0">Total Count: {totalCount}</p> */}
+          {hasSearched && <p className="text-muted m-0">Total Count: {totalCount}</p>}
         </div>
         <div className="text-center">
           {data.length > 0 && (
@@ -134,9 +138,11 @@ function QSRBankReport() {
           )}
         </div>
       </div>
-
       {loading ? (
-        <p>Loading data...</p>
+        <div className="text-center my-4">
+          <img src={loaderGif} alt="Loading..." style={{ width: '80px' }} />
+          <p className="mt-2">Loading data...</p>
+        </div>
       ) : (
         <>
           <div className="table-responsive-wrapper mb-3">
@@ -149,16 +155,24 @@ function QSRBankReport() {
                   ))}
                 </tr>
               </thead>
-              <tbody>
-                {data.map((row, rowIndex) => (
-                  <tr key={rowIndex}>
-                    <td>{(pageNumber - 1) * pageSize + rowIndex + 1}</td>
-                    {headers.map((col, colIndex) => (
-                      <td key={colIndex}>{formatValue(row[col])}</td>
-                    ))}
-                  </tr>
-                ))}
-              </tbody>
+           <tbody>
+              {hasSearched && data.length > 0 && data.map((row, rowIndex) => (
+                <tr key={rowIndex}>
+                  <td>{(pageNumber - 1) * pageSize + rowIndex + 1}</td>
+                  {headers.map((col, colIndex) => (
+                    <td key={colIndex}>{formatValue(row[col])}</td>
+                  ))}
+                </tr>
+              ))}
+
+              {hasSearched && data.length === 0 && (
+                <tr>
+                  <td colSpan={headers.length + 1} className="text-center text-muted">
+                    No records found
+                  </td>
+                </tr>
+              )}
+          </tbody>
             </table>
           </div>
 

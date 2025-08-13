@@ -1,10 +1,11 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import axios from '../utils/axios';
 import './Common.css';
 import excelImg from '../assets/images/ExcelFile.png';
 import GenericDropdown, { SimpleDropdown } from '../components/GenericDropdown';
 import DatePicker from 'react-datepicker';
 import 'react-datepicker/dist/react-datepicker.css';
+import loaderGif from '../assets/images/Loader.gif';
 
 function MainMethod() {
   const [data, setData] = useState([]);
@@ -19,58 +20,107 @@ function MainMethod() {
   const [BagSealNoText, setBagSealNoText] = useState('');
   const [OperationBagSeal, setOperationBagSeal] = useState([]);
   const [selectedOperationBagSeal, setSelectedOperationBagSeal] = useState(null);
+  const [searchText, setSearchText] = useState('');
+  const [sortColumn, setSortColumn] = useState(null);
+  const [sortDirection, setSortDirection] = useState('asc');
+  const [hasSearched, setHasSearched] = useState(false);
 
+  const skipNextFetch = useRef(false);
   const hiddenHeaders = ['zoneCode'];
 
-  // ✅ Fetch OperationBagSeal Types
   useEffect(() => {
-    const fetchOperationBagSeal = async () => {
-      try {
-        const res = await axios.get('/api/GenericDropDown/OperationBagSeal');
-        const data = res.data.data || [];
-        const formatted = data.map((item) => ({ value: item.Id, label: item.Label }));
-        setOperationBagSeal(formatted);
-      } catch (err) {
-      }
-    };
-    fetchOperationBagSeal();
+    axios.get('/api/GenericDropDown/OperationBagSeal').then(res => {
+      const data = res.data?.data || [];
+      setOperationBagSeal(data.map(item => ({ value: item.Id, label: item.Label })));
+    });
   }, []);
 
-const handleSearch = async () => {
-if (!startDate || !endDate) {
-  alert('Please select both Start Date and End Date.');
-  return;
-}
+  const totalPages = useMemo(
+    () => Math.max(1, Math.ceil((totalCount || 0) / pageSize)),
+    [totalCount, pageSize]
+  );
+
+  useEffect(() => {
+    if (!hasSearched) return;
+    if (skipNextFetch.current) {
+      skipNextFetch.current = false;
+      return;
+    }
+    fetchData(pageNumber, pageSize);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pageNumber, pageSize]);
+
+  useEffect(() => {
+    if (pageNumber > totalPages) {
+      skipNextFetch.current = true;
+      setPageNumber(totalPages);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [totalPages]);
+
+  const fetchData = async (page, size) => {
+    if (!startDate || !endDate) return;
+
     setLoading(true);
     try {
       const filters = {
-        StartDate: startDate.toLocaleDateString('en-CA'), 
-        EndDate: endDate.toLocaleDateString('en-CA'), 
+        StartDate: startDate.toLocaleDateString('en-CA'),
+        EndDate: endDate.toLocaleDateString('en-CA'),
         SearchByBagSeal: selectedOperationBagSeal?.value ?? null,
         BagSealText: BagSealNoText ?? null,
-        PageNumber: pageNumber,
-        PageSize: pageSize,
+        PageNumber: page,
+        PageSize: size,
         IsExport: false
       };
 
       const res = await axios.get('/api/Operations/BagReport', { params: filters });
-      if (res.data.isSuccess && res.data.data.length > 0) {
-        setData(res.data.data);
-        setHeaders(Object.keys(res.data.data[0]));
-        setTotalCount(res.data.totalCount || res.data.data.length);
-      } else {
-        setData([]);
-        setHeaders([]);
-        setTotalCount(0);
-      }
+
+      const rows = res?.data?.data ?? [];
+      const countRaw =
+        res?.data?.totalCount ??
+        res?.data?.TotalCount ??
+        res?.data?.data?.totalCount;
+
+      setData(rows);
+      setHeaders(rows.length ? Object.keys(rows[0]) : []);
+
+      // Preserve/estimate totalCount to avoid pager collapse when API omits it
+      setTotalCount(prev => {
+        const n = Number(countRaw);
+        if (Number.isFinite(n) && n >= 0) {
+          // If server incorrectly returns 0 but we have rows, keep previous/lower bound
+          if (n === 0 && rows.length > 0) return prev || ((page - 1) * size + rows.length);
+          return n;
+        }
+        // No count provided: set a safe lower bound, or keep previous if bigger
+        if (rows.length > 0) {
+          const lowerBound = (page - 1) * size + rows.length;
+          return Math.max(prev, lowerBound);
+        }
+        return prev;
+      });
     } catch (err) {
       console.error('Error fetching data:', err);
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
+  };
+
+  const handleSearch = async () => {
+    if (!startDate || !endDate) return alert('Please select both Start Date and End Date.');
+    if (!hasSearched) setHasSearched(true);
+
+    if (pageNumber !== 1) {
+      setPageNumber(1);
+    } else {
+      await fetchData(1, pageSize);
+    }
   };
 
   const handleExcelDownload = async (e) => {
     e.preventDefault();
+    if (!startDate || !endDate) return alert('Please select both Start Date and End Date.');
+
     let fakeProgress = 1;
     setDownloadProgress(fakeProgress);
     const progressTimer = setInterval(() => {
@@ -80,52 +130,82 @@ if (!startDate || !endDate) {
 
     try {
       const filters = {
-        StartDate: startDate.toLocaleDateString('en-CA'), 
-        EndDate: endDate.toLocaleDateString('en-CA'), 
+        StartDate: startDate.toLocaleDateString('en-CA'),
+        EndDate: endDate.toLocaleDateString('en-CA'),
         SearchByBagSeal: selectedOperationBagSeal?.value ?? null,
         BagSealText: BagSealNoText ?? null,
         PageNumber: pageNumber,
         PageSize: pageSize,
         IsExport: true
       };
-
       const response = await axios.get('/api/Operations/BagReportExcel', {
         params: filters,
         responseType: 'blob'
       });
-
       clearInterval(progressTimer);
       setDownloadProgress(100);
-
-      const blob = new Blob([response.data], {
-        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-      });
+      const blob = new Blob([response.data], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
-      link.download = 'DarazSummaryReport.xlsx';
+      link.download = 'BagSearchReport.xlsx';
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
-    } catch (error) {
+    } catch (err) {
       clearInterval(progressTimer);
-      console.error('Excel download failed:', error);
+      console.error('Excel download failed:', err);
     } finally {
       setTimeout(() => setDownloadProgress(0), 1000);
     }
   };
 
-  const totalPages = Math.ceil(totalCount / pageSize);
-  const startPage = Math.floor((pageNumber - 1) / 10) * 10 + 1;
-  const endPage = Math.min(startPage + 9, totalPages);
-  const visibleHeaders = headers.filter(h => !hiddenHeaders.includes(h));
+  const handleSort = (column) => {
+    if (sortColumn === column) {
+      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortColumn(column);
+      setSortDirection('asc');
+    }
+  };
+
+  const sortedData = useMemo(() => {
+    if (!sortColumn) return data;
+    const copy = [...data];
+    copy.sort((a, b) => {
+      const valA = a[sortColumn];
+      const valB = b[sortColumn];
+      return sortDirection === 'asc'
+        ? String(valA ?? '').localeCompare(String(valB ?? ''))
+        : String(valB ?? '').localeCompare(String(valA ?? ''));
+    });
+    return copy;
+  }, [data, sortColumn, sortDirection]);
+
+  const filteredData = useMemo(() => {
+    const q = searchText.trim().toLowerCase();
+    if (!q) return sortedData;
+    return sortedData.filter(row =>
+      (headers || []).some(col => String(row[col] ?? '').toLowerCase().includes(q))
+    );
+  }, [sortedData, headers, searchText]);
+
+  const visibleHeaders = useMemo(
+    () => headers.filter(h => !hiddenHeaders.includes(h)),
+    [headers]
+  );
+
+  const goToPage = (p) => {
+    if (p < 1 || p > totalPages || p === pageNumber) return;
+    setPageNumber(p);
+  };
 
   return (
     <div className="p-4">
       <div className="d-flex justify-content-between align-items-center mb-3">
         <div className="flex-grow-1 text-center">
-          <h3 className="report-title m-0">Bag Search Report:</h3>
-          <p className="text-muted m-0">Total Count: {totalCount}</p>
+          <h3 className="report-title m-0">Bag Search Report</h3>
+          {hasSearched && <p className="text-muted m-0">Total Count: {totalCount}</p>}
         </div>
         <div className="text-center">
           {data.length > 0 && (
@@ -146,116 +226,154 @@ if (!startDate || !endDate) {
         </div>
       </div>
 
-      <div className="mb-3 d-flex align-items-end flex-wrap gap-2">
-        <div style={{ width: '170px' }}>
-          <DatePicker
-            selected={startDate}
-            onChange={(date) => setStartDate(date)}
-            dateFormat="MM/dd/yyyy"
-            placeholderText="Start Date"
-            className="form-control"
-          />
-        </div>
-
+      <div className="p-3 border rounded mb-3">
+        <div className="d-flex align-items-end flex-wrap gap-2">
           <div style={{ width: '170px' }}>
-          <DatePicker
-            selected={endDate}
-            onChange={(date) => setEndDate(date)}
-            dateFormat="MM/dd/yyyy"
-            placeholderText="End Date"
-            className="form-control"
-          />
+            <label className="form-label">Start Date</label>
+            <DatePicker selected={startDate} onChange={(date) => setStartDate(date)} className="form-control" dateFormat="MM/dd/yyyy" />
+          </div>
+          <div style={{ width: '170px' }}>
+            <label className="form-label">End Date</label>
+            <DatePicker selected={endDate} onChange={(date) => setEndDate(date)} className="form-control" dateFormat="MM/dd/yyyy" />
+          </div>
+          <div style={{ width: '200px' }}>
+            <label className="form-label">Bag Seal Type</label>
+            <SimpleDropdown dropdownOptions={OperationBagSeal} onChange={setSelectedOperationBagSeal} />
+          </div>
+          <div style={{ width: '200px' }}>
+            <label className="form-label">Bag/Seal No</label>
+            <input
+              type="text"
+              className="form-control"
+              placeholder="Bag/Seal No"
+              value={BagSealNoText}
+              onChange={(e) => setBagSealNoText(e.target.value)}
+            />
+          </div>
         </div>
-
-         <SimpleDropdown
-            dropdownOptions={OperationBagSeal} 
-            placeholder="Search Bag Seal"
-            onChange={(selected) => setSelectedOperationBagSeal(selected)}
-          />
-
-             <div style={{ width: '200px' }}>
-          <input
-            type="text"
-            className="form-control"
-            placeholder="Bag/Seal No"
-            value={BagSealNoText}
-            onChange={(e) => setBagSealNoText(e.target.value)}
-          />
-        </div>
-
-        <div style={{ width: '120px', marginLeft: 'auto' }}>
-          <button className="btn btn-primary w-100" onClick={handleSearch}>Search</button>
+        <div className="mt-3 text-end">
+          <button className="btn btn-primary" type="button" onClick={handleSearch}>Search</button>
         </div>
       </div>
 
+      <div className="mb-2 text-end" style={{ width: '220px', marginLeft: 'auto' }}>
+        <input
+          type="text"
+          className="form-control"
+          placeholder="Search in all columns"
+          value={searchText}
+          onChange={(e) => setSearchText(e.target.value)}
+        />
+      </div>
+
       {loading ? (
-        <p>Loading data...</p>
+        <div className="text-center my-4">
+          <img src={loaderGif} alt="Loading..." style={{ width: '80px' }} />
+          <p className="mt-2">Loading data...</p>
+        </div>
       ) : (
         <>
-          <div className="table-responsive-wrapper mb-3">
+          <div className="table-responsive-wrapper mb-3 table-wrapper-fixed-height">
             <table className="table table-bordered table-hover">
-              <thead className="table-dark">
-                <tr>
-                  <th>S.No.</th>
-                  {visibleHeaders.map((header, i) => (
-                    <th key={i}>{header}</th>
-                  ))}
-                </tr>
-              </thead>
+              {headers.length > 0 && (
+                <thead className="table-dark">
+                  <tr>
+                    <th>S.No.</th>
+                    {visibleHeaders.map((header, i) => (
+                      <th key={i} onClick={() => handleSort(header)} style={{ cursor: 'pointer' }}>
+                        {header}{sortColumn === header && (sortDirection === 'asc' ? ' 🔼' : ' 🔽')}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+              )}
               <tbody>
-                {data
-                  .filter(row => row.Zone !== 'Grand Total')
-                  .map((row, rowIndex) => (
-                    <tr key={rowIndex}>
-                      <td>{(pageNumber - 1) * pageSize + rowIndex + 1}</td>
-                      {visibleHeaders.map((col, colIndex) => (
-                        <td key={colIndex}>{formatValue(row[col])}</td>
-                      ))}
-                    </tr>
-                  ))}
+                {filteredData.map((row, rowIndex) => (
+                  <tr key={rowIndex}>
+                    <td>{(pageNumber - 1) * pageSize + rowIndex + 1}</td>
+                    {visibleHeaders.map((col, colIndex) => (
+                      <td key={colIndex}>{formatValue(row[col])}</td>
+                    ))}
+                  </tr>
+                ))}
+
+                {hasSearched && !loading && filteredData.length === 0 && (
+                  <tr>
+                    <td colSpan={visibleHeaders.length + 1} className="text-center text-muted">
+                      No records found
+                    </td>
+                  </tr>
+                )}
               </tbody>
             </table>
           </div>
 
-          <div className="d-flex justify-content-between align-items-center mt-3">
-            <div>
-              <label className="me-2"><strong>Page Size:</strong></label>
-              <select
-                className="form-select form-select-sm w-auto d-inline-block"
-                value={pageSize}
-                onChange={(e) => {
-                  setPageSize(Number(e.target.value));
-                  setPageNumber(1);
-                }}
-              >
-                {[50, 100, 500, 1000].map(size => (
-                  <option key={size} value={size}>{size}</option>
-                ))}
-              </select>
-            </div>
-
-            <div>
-              {startPage > 1 && (
-                <button className="btn btn-sm btn-outline-secondary mx-1" onClick={() => setPageNumber(startPage - 1)}>
-                  &lt;&lt;
-                </button>
-              )}
-              {Array.from({ length: endPage - startPage + 1 }, (_, i) => startPage + i).map((num) => (
-                <button
-                  key={num}
-                  className={`btn btn-sm mx-1 ${num === pageNumber ? 'btn-primary' : 'btn-outline-primary'}`}
-                  onClick={() => setPageNumber(num)}
+          {hasSearched && (
+            <div className="d-flex justify-content-between align-items-center mt-3">
+              {/* Page Size: always show after a search */}
+              <div>
+                <label className="me-2"><strong>Page Size:</strong></label>
+                <select
+                  className="form-select form-select-sm w-auto d-inline-block"
+                  value={pageSize}
+                  onChange={(e) => {
+                    const size = Number(e.target.value);
+                    setPageSize(size);
+                  }}
                 >
-                  {num}
-                </button>
-              ))}
-              {endPage < totalPages && (
-                <button className="btn btn-sm btn-outline-secondary mx-1" onClick={() => setPageNumber(endPage + 1)}>
-                  &gt;&gt;
-                </button>
+                  {[50, 100, 500, 1000].map(size => (
+                    <option key={size} value={size}>{size}</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Pager: show if we have results OR known totalCount */}
+              {(totalCount > 0 || data.length > 0) && (
+                <div className="d-flex flex-wrap">
+                  {(() => {
+                    const maxVisiblePages = 10;
+                    const blockStart = Math.floor((pageNumber - 1) / maxVisiblePages) * maxVisiblePages + 1;
+                    const blockEnd = Math.min(blockStart + maxVisiblePages - 1, totalPages);
+
+                    return (
+                      <>
+                        {blockStart > 1 && (
+                          <button
+                            type="button"
+                            className="btn btn-sm btn-outline-secondary mx-1"
+                            onClick={() => goToPage(blockStart - 1)}
+                          >
+                            &laquo;
+                          </button>
+                        )}
+
+                        {Array.from({ length: blockEnd - blockStart + 1 }, (_, i) => blockStart + i).map(num => (
+                          <button
+                            type="button"
+                            key={num}
+                            className={`btn btn-sm mx-1 ${num === pageNumber ? 'btn-primary' : 'btn-outline-primary'}`}
+                            onClick={() => goToPage(num)}
+                          >
+                            {num}
+                          </button>
+                        ))}
+
+                        {blockEnd < totalPages && (
+                          <button
+                            type="button"
+                            className="btn btn-sm btn-outline-secondary mx-1"
+                            onClick={() => goToPage(blockEnd + 1)}
+                          >
+                            &raquo;
+                          </button>
+                        )}
+                      </>
+                    );
+                  })()}
+                </div>
               )}
             </div>
-          </div>
+          )}
         </>
       )}
     </div>
@@ -264,12 +382,8 @@ if (!startDate || !endDate) {
 
 function formatValue(value) {
   if (value === null || value === '') return '-';
-  if (typeof value === 'string' && value.includes('T00:00:00')) {
-    return new Date(value).toLocaleDateString();
-  }
-  if (typeof value === 'object') {
-    return JSON.stringify(value);
-  }
+  if (typeof value === 'string' && value.includes('T00:00:00')) return new Date(value).toLocaleDateString();
+  if (typeof value === 'object') return JSON.stringify(value);
   return value;
 }
 

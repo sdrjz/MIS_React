@@ -3,6 +3,7 @@ import './Navbar.css';
 import { Link } from 'react-router-dom';
 
 function Navbar() {
+  // const [accountdata, accountdataSetShowMenu] = useState(false);
   const [showSalesMenu, setShowSalesMenu] = useState(false);
   const [showOperationMenu, setShowOperationMenu] = useState(false);
   const [CODShow, CODSetShowMenu] = useState(false);
@@ -13,7 +14,24 @@ function Navbar() {
       <div className="d-flex gap-2 flex-wrap navbtn">
 
         <button className="btn btn-dark btn-sm">Dashboard</button>
-        <button className="btn btn-dark btn-sm">Accounts Reports</button>
+       
+        {/* Accounts data Reports with submenu */}
+        {/* <div
+          className="position-relative"
+          onMouseEnter={() => accountdataSetShowMenu(true)}
+          onMouseLeave={() => accountdataSetShowMenu(false)}
+        >
+           <button className="btn btn-dark btn-sm">Accounts Reports</button>
+          {accountdata && (
+            <ul className="submenu bg-dark text-white position-absolute list-unstyled m-0">
+               <li>
+                <Link to="/InvocieSummaryMonthly" className="submenu-item text-white text-decoration-none d-block">
+                  Invocie Summary Monthly
+                </Link>
+              </li>
+            </ul>
+          )}
+        </div> */}
 
         {/* Operation Reports with submenu */}
         <div
@@ -27,12 +45,12 @@ function Navbar() {
            <li>
               <Link to="/BagSearchReport" className="submenu-item text-white text-decoration-none d-block">Bag Search</Link>
             </li>
-            <li>
+            {/* <li>
               <Link to="/QSRReport" className="submenu-item text-white text-decoration-none d-block">QSR Report</Link>
             </li>
             <li>
               <Link to="/QSRBankReport" className="submenu-item text-white text-decoration-none d-block">QSR Bank Report</Link>
-            </li>
+            </li> */}
             <li>
               <Link to="/ControlTower" className="submenu-item text-white text-decoration-none d-block">Control Tower Report</Link> {/* ✅ New link */}
             </li>
@@ -59,11 +77,11 @@ function Navbar() {
            <button className="btn btn-dark btn-sm">Master Data</button>
           {masterdata && (
             <ul className="submenu bg-dark text-white position-absolute list-unstyled m-0">
-               <li>
+               {/* <li>
                 <Link to="/CustomersMasterData" className="submenu-item text-white text-decoration-none d-block">
                   Customers
                 </Link>
-              </li>
+              </li> */}
               <li>
                 <Link to="/RiderMasterData" className="submenu-item text-white text-decoration-none d-block">
                   Rider Master Data
@@ -83,6 +101,11 @@ function Navbar() {
           {CODShow && (
             <ul className="submenu bg-dark text-white position-absolute list-unstyled m-0">
               <li>
+                <Link to="/CODDailyPerformance" className="submenu-item text-white text-decoration-none d-block">
+                  COD Daily Performance
+                </Link>
+              </li>
+              <li>
                 <Link to="/DarazDetails" className="submenu-item text-white text-decoration-none d-block">
                   Daraz Details
                 </Link>
@@ -99,7 +122,7 @@ function Navbar() {
               </li>
               <li>
                 <Link to="/DeliveredNoRRR" className="submenu-item text-white text-decoration-none d-block">
-                  Delivered No RRR
+                  Delivered No RR
                 </Link>
               </li>
               <li>
@@ -121,7 +144,7 @@ function Navbar() {
           {showSalesMenu && (
             <ul className="submenu bg-dark text-white position-absolute list-unstyled m-0">
               <li>
-                <Link to="/branch-cash-credit-sale" className="submenu-item text-white text-decoration-none d-block">
+                <Link to="/branchcashcreditsale" className="submenu-item text-white text-decoration-none d-block">
                   Branch Cash Credit Sale
                 </Link>
               </li>

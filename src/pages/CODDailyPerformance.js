@@ -1,4 +1,3 @@
-// ✅ Fully Enhanced DarazDetails with stable paging & safe totalCount
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import axios from '../utils/axios';
 import './Common.css';
@@ -8,7 +7,7 @@ import DatePicker from 'react-datepicker';
 import 'react-datepicker/dist/react-datepicker.css';
 import loaderGif from '../assets/images/Loader.gif';
 
-function DarazDetails() {
+function MainMethod() {
   const [data, setData] = useState([]);
   const [headers, setHeaders] = useState([]);
 
@@ -19,9 +18,17 @@ function DarazDetails() {
   const [loading, setLoading] = useState(false);
   const [downloadProgress, setDownloadProgress] = useState(0);
 
+  const [zoneOptions, setZoneOptions] = useState([]);
+  const [branchOptions, setBranchOptions] = useState([]);
+  const [selectedZones, setSelectedZones] = useState([]);   // store IDs
+  const [selectedBranch, setSelectedBranch] = useState([]); // store IDs
+
+  const [SDOCodeText, setSDOCodeText] = useState('');
   const [startDate, setStartDate] = useState(null);
-  const [reportTypeOptions, setReportTypeOptions] = useState([]);
-  const [selectedReportType, setSelectedReportType] = useState(null);
+  const [endDate, setEndDate] = useState(null);
+
+  const [CODNonCODOptions, setCODNonCODOptions] = useState([]);
+  const [selectedCODNonCOD, setSelectedCODNonCOD] = useState(null);
 
   const [searchText, setSearchText] = useState('');
   const [sortColumn, setSortColumn] = useState(null);
@@ -31,18 +38,18 @@ function DarazDetails() {
   const skipNextFetch = useRef(false);
 
   const hiddenHeaders = ['zoneCode'];
+  const toIds = (vals) => (vals || []).map(v => (v && typeof v === 'object' ? v.value : v));
 
-  // Load report types
+  // Load dropdowns
   useEffect(() => {
-    (async () => {
-      try {
-        const res = await axios.get('/api/GenericDropDown/ReportType');
-        const data = res.data.data || [];
-        setReportTypeOptions(data.map((item) => ({ value: item.Id, label: item.Label })));
-      } catch (err) {
-        console.error(err);
-      }
-    })();
+    axios.get('/api/GenericDropDown/zone').then(res => {
+      const formatted = res.data.data?.map(item => ({ value: item.Id, label: item.Label })) || [];
+      setZoneOptions(formatted);
+    });
+    axios.get('/api/GenericDropDown/CODNonCOD').then(res => {
+      const formatted = res.data.data?.map(item => ({ value: item.Id, label: item.Label })) || [];
+      setCODNonCODOptions(formatted);
+    });
   }, []);
 
   // Total pages (never below 1)
@@ -51,7 +58,14 @@ function DarazDetails() {
     [totalCount, pageSize]
   );
 
-  // Re-fetch on page/pageSize change AFTER first search
+  // Fetch branches when zones change (IDs)
+  const fetchBranches = async (zoneIds) => {
+    const res = await axios.get(`/api/GenericDropDown/branch?parentId=${zoneIds.join(',')}`);
+    const formatted = res.data.data?.map(item => ({ value: item.Id, label: item.Label })) || [];
+    setBranchOptions(formatted);
+  };
+
+  // Refetch on page/pageSize change AFTER first search
   useEffect(() => {
     if (!hasSearched) return;
     if (skipNextFetch.current) { skipNextFetch.current = false; return; }
@@ -59,7 +73,7 @@ function DarazDetails() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pageNumber, pageSize]);
 
-  // If total pages shrink, correct page without causing a second request
+  // If total pages shrink, correct pageNumber without causing a second request
   useEffect(() => {
     if (pageNumber > totalPages) {
       skipNextFetch.current = true;
@@ -84,18 +98,23 @@ function DarazDetails() {
   };
 
   const fetchData = async (page, size) => {
-    if (!startDate || !selectedReportType?.value) return;
+    if (!startDate || !endDate || selectedCODNonCOD?.value == null) return;
 
     setLoading(true);
     try {
       const filters = {
+        ZoneCode: selectedZones.length ? selectedZones.join(',') : null,
+        BranchCode: selectedBranch.length ? selectedBranch.join(',') : null,
+        SDOCode: SDOCodeText || null,
         StartDate: startDate.toLocaleDateString('en-CA'),
-        ReportType: selectedReportType.value,
+        EndDate: endDate.toLocaleDateString('en-CA'),
+        CODNonCOD: selectedCODNonCOD?.value,
         PageNumber: page,
         PageSize: size,
-        IsExport: false
+        IsExport: false,
       };
-      const res = await axios.get('/api/COD/DarazDetails', { params: filters });
+
+      const res = await axios.get('/api/COD/CODDailyPerformanceReport', { params: filters });
 
       const rows = res?.data?.data ?? [];
       setData(rows);
@@ -109,21 +128,21 @@ function DarazDetails() {
 
       updateTotalCountSafe(countRaw, rows.length, page, size);
     } catch (err) {
-      console.error('Error fetching data:', err);
+      console.error('Fetch failed:', err);
     } finally {
       setLoading(false);
     }
   };
 
   const handleSearch = async () => {
-    if (!startDate || !selectedReportType) return alert('Please select both Start Date and Report Type.');
+    if (!startDate || !endDate || selectedCODNonCOD?.value == null) return alert('Select all required filters.');
     if (!hasSearched) setHasSearched(true);
     if (pageNumber !== 1) setPageNumber(1); else await fetchData(1, pageSize);
   };
 
   const handleExcelDownload = async (e) => {
     e.preventDefault();
-    if (!startDate || !selectedReportType?.value) return alert('Please select both Start Date and Report Type.');
+    if (!startDate || !endDate || selectedCODNonCOD?.value == null) return alert('Select all required filters.');
 
     let fakeProgress = 1;
     setDownloadProgress(fakeProgress);
@@ -133,31 +152,35 @@ function DarazDetails() {
     }, 100);
     try {
       const filters = {
+        ZoneCode: selectedZones.length ? selectedZones.join(',') : null,
+        BranchCode: selectedBranch.length ? selectedBranch.join(',') : null,
         StartDate: startDate.toLocaleDateString('en-CA'),
-        ReportType: selectedReportType?.value || null,
+        EndDate: endDate.toLocaleDateString('en-CA'),
+        SDOCode: SDOCodeText || null,
+        CODNonCOD: selectedCODNonCOD?.value,
         PageNumber: pageNumber,
         PageSize: pageSize,
-        IsExport: true
+        IsExport: true,
       };
-      const response = await axios.get('/api/COD/DarazDetailsExcel', {
+      const response = await axios.get('/api/COD/CODDailyPerformanceReportExcel', {
         params: filters,
-        responseType: 'blob'
+        responseType: 'blob',
       });
       clearInterval(progressTimer);
       setDownloadProgress(100);
       const blob = new Blob([response.data], {
-        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
       });
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
-      link.download = 'DarazDetailsReport.xlsx';
+      link.download = 'CODDailyPerformanceReport.xlsx';
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
-    } catch (error) {
+    } catch (err) {
       clearInterval(progressTimer);
-      console.error('Excel download failed:', error);
+      console.error('Download error:', err);
     } finally {
       setTimeout(() => setDownloadProgress(0), 1000);
     }
@@ -207,8 +230,8 @@ function DarazDetails() {
     <div className="p-4">
       <div className="d-flex justify-content-between align-items-center mb-3">
         <div className="flex-grow-1 text-center">
-          <h3 className="report-title m-0">Daraz Status Report</h3>
-          {/* Show Total Count only AFTER first search */}
+          <h3 className="report-title m-0">COD Daily Performance Report</h3>
+          {/* Total Count only AFTER first search */}
           {hasSearched && <p className="text-muted m-0">Total Count: {totalCount}</p>}
         </div>
         <div className="text-center">
@@ -237,9 +260,32 @@ function DarazDetails() {
             <label className="form-label">Start Date</label>
             <DatePicker selected={startDate} onChange={(d) => setStartDate(d)} dateFormat="MM/dd/yyyy" className="form-control" />
           </div>
+          <div style={{ width: '170px' }}>
+            <label className="form-label">End Date</label>
+            <DatePicker selected={endDate} onChange={(d) => setEndDate(d)} dateFormat="MM/dd/yyyy" className="form-control" />
+          </div>
+          <div style={{ width: '200px' }}>
+            <label className="form-label">Zones</label>
+            <GenericDropdown
+              dropdownOptions={zoneOptions}
+              onChange={(vals) => {
+                const ids = toIds(vals);
+                setSelectedZones(ids);
+                fetchBranches(ids);
+              }}
+            />
+          </div>
           <div style={{ width: '180px' }}>
-            <label className="form-label">Report Type</label>
-            <SimpleDropdown dropdownOptions={reportTypeOptions} placeholder="Report Type" onChange={setSelectedReportType} />
+            <label className="form-label">Branch</label>
+            <GenericDropdown dropdownOptions={branchOptions} onChange={(vals) => setSelectedBranch(toIds(vals))} />
+          </div>
+          <div style={{ width: '180px' }}>
+            <label className="form-label">SDO Code</label>
+            <input type="text" className="form-control" value={SDOCodeText} onChange={(e) => setSDOCodeText(e.target.value)} />
+          </div>
+          <div style={{ width: '180px' }}>
+            <label className="form-label">COD Type</label>
+            <SimpleDropdown dropdownOptions={CODNonCODOptions} onChange={setSelectedCODNonCOD} placeholder="Select COD" isClearable />
           </div>
         </div>
         <div className="mt-3 text-end">
@@ -288,7 +334,7 @@ function DarazDetails() {
                   </tr>
                 ))}
 
-                {/* "No records found" only AFTER first search */}
+                {/* Show "No records found" only AFTER first search */}
                 {hasSearched && !loading && filteredData.length === 0 && (
                   <tr>
                     <td colSpan={visibleHeaders.length + 1} className="text-center text-muted">
@@ -317,9 +363,12 @@ function DarazDetails() {
               </div>
 
               <div className="d-flex flex-wrap">
-                {/* Block pager with « » */}
                 {blockStart > 1 && (
-                  <button type="button" className="btn btn-sm btn-outline-secondary mx-1" onClick={() => goToPage(blockStart - 1)}>
+                  <button
+                    type="button"
+                    className="btn btn-sm btn-outline-secondary mx-1"
+                    onClick={() => goToPage(blockStart - 1)}
+                  >
                     &laquo;
                   </button>
                 )}
@@ -336,7 +385,11 @@ function DarazDetails() {
                 ))}
 
                 {blockEnd < totalPages && (
-                  <button type="button" className="btn btn-sm btn-outline-secondary mx-1" onClick={() => goToPage(blockEnd + 1)}>
+                  <button
+                    type="button"
+                    className="btn btn-sm btn-outline-secondary mx-1"
+                    onClick={() => goToPage(blockEnd + 1)}
+                  >
                     &raquo;
                   </button>
                 )}
@@ -356,4 +409,4 @@ function formatValue(value) {
   return value;
 }
 
-export default DarazDetails;
+export default MainMethod;

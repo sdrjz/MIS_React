@@ -10,14 +10,14 @@
 .table thead th {
   text-align: center;
   vertical-align: middle;
-  font-size: 8.5px;
+  font-size:11px;
   padding: 8px; 
 }
 
 .table tbody td {
   padding: 6px 8px;
   vertical-align: middle;
-   font-size: 9px;
+   font-size: 14px;
 }
 
 .report-title {
@@ -45,5 +45,23 @@
   font-size: 10px;
 
 }
+
+.loader-container {
+  text-align: center;
+  margin-top: 30px;
+}
+
+
+.table-heading {
+  text-align: left;
+  font-weight: bold;
+  margin-bottom: 0.5rem;
+}
+
+.table-wrapper-fixed-height {
+  min-height: 300px;
+}
+
+
 
 
